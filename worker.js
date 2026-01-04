@@ -1,15 +1,18 @@
 import nacl from "tweetnacl";
 
+/* ================= CONFIG ================= */
 const API_URL = "https://mainserver.serv00.net/API/players.php";
-const ONLINE_MINUTES = 2;
+const ONLINE_THRESHOLD_MINUTES = 2;
+const RECENT_THRESHOLD_DAYS = 7;
 
+/* =============== MAIN HANDLER ============== */
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // ---- Discord signature headers ----
+    // ----- Discord signature headers -----
     const signature = request.headers.get("X-Signature-Ed25519");
     const timestamp = request.headers.get("X-Signature-Timestamp");
 
@@ -19,7 +22,7 @@ export default {
 
     const body = await request.clone().arrayBuffer();
 
-    // ---- Verify request ----
+    // ----- Verify Discord request -----
     const isValid = nacl.sign.detached.verify(
       new Uint8Array([
         ...new TextEncoder().encode(timestamp),
@@ -35,54 +38,84 @@ export default {
 
     const interaction = JSON.parse(new TextDecoder().decode(body));
 
-    // ---- Discord ping ----
+    /* ---------- Discord PING ---------- */
     if (interaction.type === 1) {
       return json({ type: 1 });
     }
 
-    // ---- Slash command ----
+    /* ---------- Slash Commands ---------- */
     if (interaction.type === 2) {
       const command = interaction.data.name.toLowerCase();
+      const players = await fetchPlayerData();
+
+      if (!players) {
+        return reply("❌ Unable to fetch player data.");
+      }
+
+      const now = new Date();
 
       if (command === "online") {
-        const players = await fetchPlayers();
-
-        if (!players) {
-          return reply("❌ Failed to fetch player data.");
-        }
-
-        const now = new Date();
         const online = players.filter(p => {
           if (!p.last_login) return false;
-          const last = new Date(p.last_login + "Z");
-          return (now - last) / 60000 <= ONLINE_MINUTES;
+          const last = parseAPIDate(p.last_login);
+          return (now - last) / 60000 <= ONLINE_THRESHOLD_MINUTES;
         });
 
         if (online.length === 0) {
           return reply("😴 No players online in the last 2 minutes.");
         }
 
-        const names = online.map(p => p.username).join("\n");
-
         return reply(
-          `🎮 **${online.length} players online** (last 2 minutes):\n${names}`
+          `🎮 **${online.length} players online** (last 2 minutes):\n` +
+          online.map(p => p.username ?? "Unknown").join("\n")
         );
       }
+
+      if (command === "recent") {
+        const recent = players.filter(p => {
+          if (!p.last_login) return false;
+          const last = parseAPIDate(p.last_login);
+          return (now - last) / 86400000 <= RECENT_THRESHOLD_DAYS;
+        });
+
+        if (recent.length === 0) {
+          return reply("😴 No players played in the last 7 days.");
+        }
+
+        const page = recent.slice(0, 10).map(
+          p => `${p.username ?? "Unknown"} (${p.last_login})`
+        );
+
+        return json({
+          type: 4,
+          data: {
+            content:
+              `🕒 **Recent Players (last 7 days)**\n` +
+              page.join("\n")
+          }
+        });
+      }
+
+      return reply("❓ Unknown command.");
     }
 
     return new Response("Unhandled interaction", { status: 400 });
   }
 };
 
-// ---------------- HELPERS ----------------
+/* ================= HELPERS ================= */
 
-async function fetchPlayers() {
+async function fetchPlayerData() {
   try {
     const res = await fetch(API_URL);
     return await res.json();
   } catch {
     return null;
   }
+}
+
+function parseAPIDate(str) {
+  return new Date(str.replace(" ", "T") + "Z");
 }
 
 function reply(content) {
