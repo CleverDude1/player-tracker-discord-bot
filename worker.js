@@ -67,7 +67,7 @@ export default {
 
         return reply(
           `🎮 **${online.length} players online** (last 2 minutes):\n` +
-          online.map(p => p.username ?? "Unknown").join("\n")
+          online.map(p => p.nickname ?? "Unknown").join("\n")
         );
       }
 
@@ -83,7 +83,7 @@ export default {
         }
 
         const page = recent.slice(0, 10).map(
-          p => `${p.username ?? "Unknown"} (${p.last_login})`
+          p => `${p.nickname ?? "Unknown"} (${p.last_login})`
         );
 
         return json({
