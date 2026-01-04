@@ -1,9 +1,7 @@
 import nacl from "tweetnacl";
 
 /* ================= CONFIG ================= */
-const API_URL = "https://mainserver.serv00.net/DiscordbotAPI/API.php";
-const ONLINE_THRESHOLD_MINUTES = 2;
-const RECENT_THRESHOLD_DAYS = 7;
+const API_URL = "https://mainserver.serv00.net/DiscordbotAPI/API.php"; // Light API URL
 
 /* =============== MAIN HANDLER ============== */
 export default {
@@ -46,59 +44,26 @@ export default {
     /* ---------- Slash Commands ---------- */
     if (interaction.type === 2) {
       const command = interaction.data.name.toLowerCase();
+
+      if (command !== "online") {
+        return reply("❓ Unknown command.");
+      }
+
+      // Fetch online players directly from light API
       const players = await fetchPlayerData();
-
       if (!players) {
-        return reply("❌ Unable to fetch player data.");
+        return reply("❌ Unable to fetch online players.");
       }
 
-      const now = new Date();
-
-      // ----- Online command -----
-      if (command === "online") {
-        // Only consider players with a valid last_login
-        const online = players.filter(p => {
-          if (!p.last_login || p.last_login === "0000-00-00 00:00:00") return false;
-          const last = new Date(p.last_login.replace(" ", "T") + "Z");
-          return (now - last) / 60000 <= ONLINE_THRESHOLD_MINUTES;
-        });
-
-        if (online.length === 0) {
-          return reply("😴 No players online in the last 2 minutes.");
-        }
-
-        return reply(
-          `🎮 **${online.length} players online** (last 2 minutes):\n` +
-          online.map(p => p.nickname || "Unknown").join("\n")
-        );
+      if (players.length === 0) {
+        return reply("😴 No players online right now.");
       }
 
-      // ----- Recent command -----
-      if (command === "recent") {
-        // Only players with valid last_login and within 7 days
-        const recent = players.filter(p => {
-          if (!p.last_login || p.last_login === "0000-00-00 00:00:00") return false;
-          const last = new Date(p.last_login.replace(" ", "T") + "Z");
-          return (now - last) / 86400000 <= RECENT_THRESHOLD_DAYS;
-        });
+      // Build message
+      const content = `🎮 **${players.length} players online:**\n` +
+        players.map(p => p.nickname || "Unknown").join("\n");
 
-        if (recent.length === 0) {
-          return reply("😴 No players played in the last 7 days.");
-        }
-
-        const page = recent.slice(0, 10).map(
-          p => `${p.nickname || "Unknown"} (${p.last_login})`
-        );
-
-        return json({
-          type: 4,
-          data: {
-            content: `🕒 **Recent Players (last 7 days)**\n` + page.join("\n"),
-          },
-        });
-      }
-
-      return reply("❓ Unknown command.");
+      return reply(content);
     }
 
     return new Response("Unhandled interaction", { status: 400 });
