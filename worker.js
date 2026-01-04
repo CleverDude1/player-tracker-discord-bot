@@ -54,10 +54,12 @@ export default {
 
       const now = new Date();
 
+      // ----- Online command -----
       if (command === "online") {
-        const online = players.filter((p) => {
-          const last = parseAPIDate(p.last_login);
-          if (!last) return false; // skip invalid dates
+        // Only consider players with a valid last_login
+        const online = players.filter(p => {
+          if (!p.last_login || p.last_login === "0000-00-00 00:00:00") return false;
+          const last = new Date(p.last_login.replace(" ", "T") + "Z");
           return (now - last) / 60000 <= ONLINE_THRESHOLD_MINUTES;
         });
 
@@ -67,14 +69,16 @@ export default {
 
         return reply(
           `🎮 **${online.length} players online** (last 2 minutes):\n` +
-            online.map((p) => p.nickname || "Unknown").join("\n")
+          online.map(p => p.nickname || "Unknown").join("\n")
         );
       }
 
+      // ----- Recent command -----
       if (command === "recent") {
-        const recent = players.filter((p) => {
-          const last = parseAPIDate(p.last_login);
-          if (!last) return false; // skip invalid dates
+        // Only players with valid last_login and within 7 days
+        const recent = players.filter(p => {
+          if (!p.last_login || p.last_login === "0000-00-00 00:00:00") return false;
+          const last = new Date(p.last_login.replace(" ", "T") + "Z");
           return (now - last) / 86400000 <= RECENT_THRESHOLD_DAYS;
         });
 
@@ -83,7 +87,7 @@ export default {
         }
 
         const page = recent.slice(0, 10).map(
-          (p) => `${p.nickname || "Unknown"} (${p.last_login})`
+          p => `${p.nickname || "Unknown"} (${p.last_login})`
         );
 
         return json({
@@ -112,11 +116,6 @@ async function fetchPlayerData() {
   }
 }
 
-function parseAPIDate(str) {
-  if (!str || str === "0000-00-00 00:00:00") return null;
-  return new Date(str.replace(" ", "T") + "Z");
-}
-
 function reply(content) {
   return json({
     type: 4,
@@ -131,5 +130,5 @@ function json(data) {
 }
 
 function hexToUint8(hex) {
-  return new Uint8Array(hex.match(/.{1,2}/g).map((b) => parseInt(b, 16)));
+  return new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
 }
