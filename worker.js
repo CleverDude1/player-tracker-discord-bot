@@ -1,7 +1,7 @@
 import nacl from "tweetnacl";
 
 /* ================= CONFIG ================= */
-const API_URL = "https://mainserver.serv00.net/API/players.php";
+const API_URL = "https://mainserver.serv00.net/DiscordbotAPI/API.php";
 const ONLINE_THRESHOLD_MINUTES = 2;
 const RECENT_THRESHOLD_DAYS = 7;
 
