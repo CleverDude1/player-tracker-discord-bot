@@ -1,5 +1,8 @@
 import nacl from "tweetnacl";
 
+const API_URL = "https://mainserver.serv00.net/API/players.php";
+const ONLINE_MINUTES = 2;
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -16,9 +19,12 @@ export default {
 
     const body = await request.clone().arrayBuffer();
 
-    // ---- Verify signature ----
+    // ---- Verify request ----
     const isValid = nacl.sign.detached.verify(
-      new Uint8Array([...new TextEncoder().encode(timestamp), ...new Uint8Array(body)]),
+      new Uint8Array([
+        ...new TextEncoder().encode(timestamp),
+        ...new Uint8Array(body)
+      ]),
       hexToUint8(signature),
       hexToUint8(env.DISCORD_PUBLIC_KEY)
     );
@@ -29,27 +35,38 @@ export default {
 
     const interaction = JSON.parse(new TextDecoder().decode(body));
 
-    // ---- Discord PING ----
+    // ---- Discord ping ----
     if (interaction.type === 1) {
       return json({ type: 1 });
     }
 
-    // ---- Slash Commands ----
+    // ---- Slash command ----
     if (interaction.type === 2) {
       const command = interaction.data.name.toLowerCase();
 
       if (command === "online") {
-        return json({
-          type: 4,
-          data: { content: "🎮 Online command works!" }
-        });
-      }
+        const players = await fetchPlayers();
 
-      if (command === "recent") {
-        return json({
-          type: 4,
-          data: { content: "📜 Recent command works!" }
+        if (!players) {
+          return reply("❌ Failed to fetch player data.");
+        }
+
+        const now = new Date();
+        const online = players.filter(p => {
+          if (!p.last_login) return false;
+          const last = new Date(p.last_login + "Z");
+          return (now - last) / 60000 <= ONLINE_MINUTES;
         });
+
+        if (online.length === 0) {
+          return reply("😴 No players online in the last 2 minutes.");
+        }
+
+        const names = online.map(p => p.username).join("\n");
+
+        return reply(
+          `🎮 **${online.length} players online** (last 2 minutes):\n${names}`
+        );
       }
     }
 
@@ -58,6 +75,23 @@ export default {
 };
 
 // ---------------- HELPERS ----------------
+
+async function fetchPlayers() {
+  try {
+    const res = await fetch(API_URL);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function reply(content) {
+  return json({
+    type: 4,
+    data: { content }
+  });
+}
+
 function json(data) {
   return new Response(JSON.stringify(data), {
     headers: { "Content-Type": "application/json" }
