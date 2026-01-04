@@ -1,0 +1,7 @@
+{
+  "name": "discord-worker-bot",
+  "private": true,
+  "dependencies": {
+    "tweetnacl": "^1.0.3"
+  }
+}
